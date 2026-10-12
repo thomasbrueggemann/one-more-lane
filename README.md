@@ -36,8 +36,11 @@ connected to a road, orange ones show unhappy residents stuck in traffic. The ga
 Pick **Free play** on the New city screen to build without money limits: nothing costs anything and the HUD shows ∞ instead of a
 balance. Levels and the building tray still progress as usual.
 
-* **Mouse:** left-drag uses the tool, right/middle-drag pans, wheel zooms. Keys: `1`–`6` tools, `Space` pause, `Ctrl+Z` undo, `T` traffic view, `Esc` cancel, WASD/arrows pan.
+* **Mouse:** left-drag uses the tool, right/middle-drag pans, wheel zooms. Keys: `1`–`6` tools, `Space` pause, `Ctrl+Z` undo, `Ctrl+S` save, `T` traffic view, `Esc` cancel, WASD/arrows pan.
 * **Touch:** one finger uses the tool, two fingers pan and pinch to zoom. Building ghosts float above your fingertip so you can see them.
+* **Saving:** your city is autosaved to the browser every 20 seconds (start screen: *Continue*). For saves you control, open the menu and
+  choose *Save game* (three slots, or `Ctrl/Cmd+S` to save again to the same slot); *Load game* on the menu and the start screen lists
+  the autosave and the slots with level, map, size and age. Saves live in this browser's localStorage only (`one-more-lane-*` keys).
 
 ## Run it locally
 

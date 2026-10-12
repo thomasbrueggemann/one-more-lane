@@ -216,6 +216,11 @@ export class Input {
         this.app.undo();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'S')) {
+        e.preventDefault(); // not the browser's "save page"
+        if (!e.repeat) this.app.quickSave();
+        return;
+      }
       if (k === 'Escape') {
         this.app.escape();
         return;

@@ -486,7 +486,7 @@ canvas#gl {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  z-index: 40;
+  z-index: 60; /* above the menu: saving happens from there */
   pointer-events: none;
   width: min(92vw, 560px);
 }
@@ -861,6 +861,42 @@ canvas#gl {
 }
 .toggle-row:last-child {
   border: 0;
+}
+.slot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.slot:last-child {
+  border: 0;
+}
+.slot .meta {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.slot b {
+  display: block;
+  font-weight: 700;
+}
+.slot small {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 500;
+}
+.slot.empty b {
+  color: var(--ink-dim);
+}
+.slot .acts {
+  display: flex;
+  gap: 8px;
+}
+.pill.sure {
+  background: var(--bad);
+  color: #fff;
 }
 
 @media (max-width: 700px), (max-height: 520px) {

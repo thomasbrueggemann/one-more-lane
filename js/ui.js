@@ -426,10 +426,65 @@ export class UI {
     this.menuView = view;
     this.shownView = null;
     this.confirmNew = false;
+    this.slotConfirm = null;
     this.app.autosave(); // whatever the menu does next, the city as it is right now is on disk
     this.app.setPaused(true);
     this.renderMenu();
     this.el.menu.hidden = false;
+  }
+
+  openMenuView(view) {
+    this.menuView = view;
+    this.slotConfirm = null;
+    this.renderMenu();
+  }
+
+  /** The save / load slot lists. Destructive buttons need a second tap (this.slotConfirm = which one is armed). */
+  renderSlots(card, view, back) {
+    const app = this.app;
+    const saving = view === 'save';
+    const running = app.game && app.started;
+    const armed = (id, action) => this.slotConfirm && this.slotConfirm.id === id && this.slotConfirm.action === action;
+    // the first tap arms the button (it turns red and asks again), the second does it
+    const act = (id, action, label, sure, cls, fn) => h('button', { class: 'pill ' + (armed(id, action) ? 'sure' : cls), onclick: () => {
+      if (!armed(id, action)) {
+        this.slotConfirm = { id, action };
+        this.renderMenu();
+        return;
+      }
+      this.slotConfirm = null;
+      fn();
+    } }, armed(id, action) ? sure : label);
+    const rows = app.listSlots().filter((s) => !saving || s.id !== 'auto').map((s) => {
+      const m = s.meta || {};
+      const detail = [];
+      if (Number.isFinite(m.roads)) detail.push(`${m.roads} road${m.roads === 1 ? '' : 's'}`);
+      if (Number.isFinite(m.buildings)) detail.push(`${m.buildings} building${m.buildings === 1 ? '' : 's'}`);
+      if (DIFFICULTY[m.difficulty]) detail.push(DIFFICULTY[m.difficulty].name);
+      const text = s.state === 'ok' ? s.info : s.state === 'corrupt' ? 'Damaged save – cannot be loaded' : 'Empty';
+      const btns = [];
+      if (saving) {
+        const write = () => app.saveToSlot(s.id); // re-renders this list when it worked
+        btns.push(s.state === 'empty' ? h('button', { class: 'pill primary', onclick: write }, 'Save') : act(s.id, 'overwrite', 'Overwrite', 'Tap again to overwrite', '', write));
+      } else {
+        if (s.state === 'ok') {
+          const load = () => app.loadFrom(s.id);
+          btns.push(running ? act(s.id, 'load', 'Load', 'Replace current city?', 'primary', load) : h('button', { class: 'pill primary', onclick: load }, 'Load'));
+        }
+        if (s.state !== 'empty') btns.push(act(s.id, 'delete', 'Delete', 'Tap again to delete', 'danger', () => {
+          app.deleteSlot(s.id);
+          this.renderMenu();
+        }));
+      }
+      return h('div', { class: 'slot' + (s.state === 'empty' ? ' empty' : '') },
+        h('div', { class: 'meta' }, h('b', {}, s.label), h('small', {}, text), detail.length && s.state === 'ok' ? h('small', {}, detail.join(' · ')) : null),
+        h('div', { class: 'acts' }, ...btns));
+    });
+    card.append(back(), h('h2', { class: 'wordmark', style: 'font-size:30px' }, saving ? 'Save game' : 'Load game'), h('div', { class: 'road-line' }),
+      h('p', { class: 'tagline', style: 'font-size:13px;margin:0 0 6px' }, saving
+        ? 'Pick a slot. Your city is also autosaved as you play, but a slot only ever changes when you save to it. Ctrl+S saves to the same slot again.'
+        : running ? 'Loading replaces the city you are playing. The autosave follows whatever you play, so save to a slot first if you want to keep this one.' : 'Pick a saved city. The autosave is your city as you last left it.'),
+      ...rows);
   }
 
   hideMenu() {
@@ -452,6 +507,7 @@ export class UI {
     const back = () => h('button', { class: 'back', onclick: () => {
       this.menuView = 'main';
       this.confirmNew = false;
+      this.slotConfirm = null;
       this.renderMenu();
     }, html: ICONS.back }, 'Back');
     const title = () => [h('h1', { class: 'wordmark', html: GAME_NAME.html }), h('div', { class: 'road-line' })];
@@ -460,7 +516,9 @@ export class UI {
       const btns = [];
       const running = app.game && app.started;
       if (running) btns.push(h('button', { class: 'big-btn primary', onclick: () => this.hideMenu() }, 'Resume'));
-      else if (app.hasSave()) btns.push(h('button', { class: 'big-btn primary', onclick: () => app.continueGame() }, 'Continue saved city', h('small', {}, app.saveInfo())));
+      else if (app.hasSave()) btns.push(h('button', { class: 'big-btn primary', onclick: () => app.continueGame() }, 'Continue', h('small', {}, `Autosave · ${app.saveInfo()}`)));
+      if (running) btns.push(h('button', { class: 'big-btn', onclick: () => this.openMenuView('save') }, 'Save game'));
+      if (app.hasAnySave()) btns.push(h('button', { class: 'big-btn', onclick: () => this.openMenuView('load') }, 'Load game'));
       btns.push(h('button', { class: 'big-btn' + (!running && !app.hasSave() ? ' primary' : ''), onclick: () => {
         this.menuView = 'new';
         this.confirmNew = false;
@@ -512,7 +570,7 @@ export class UI {
           o.seed = Math.floor(Math.random() * 999999);
           input.value = String(o.seed);
         } }))),
-        replaces ? h('p', { class: 'tagline', style: 'font-size:13px;margin:0 0 10px' }, `There is only one save slot: a new city replaces your saved city (${app.saveInfo()}).`) : null,
+        replaces ? h('p', { class: 'tagline', style: 'font-size:13px;margin:0 0 10px' }, `A new city replaces your autosave (${app.saveInfo()}). Cities saved to a slot stay put.`) : null,
         h('button', { class: 'big-btn ' + (replaces && this.confirmNew ? 'danger' : 'primary'), style: 'width:100%', onclick: () => {
           if (replaces && !this.confirmNew) {
             this.confirmNew = true;
@@ -522,10 +580,12 @@ export class UI {
           this.confirmNew = false;
           app.startNewGame({ ...o });
         } }, replaces && this.confirmNew ? 'Tap again to replace it' : 'Start'));
+    } else if (view === 'save' || view === 'load') {
+      this.renderSlots(card, view, back);
     } else if (view === 'help') {
       card.append(back(), h('h2', { class: 'wordmark', style: 'font-size:30px' }, 'How to play'), h('div', { class: 'road-line' }),
         h('ol', { class: 'steps' }, ...HOW_TO.map(([t, d], i) => h('li', {}, h('span', { class: 'n' }, String(i + 1)), h('div', { html: `<b>${t}.</b> ${d}` })))),
-        h('p', { class: 'tagline', style: 'font-size:13px' }, 'Mouse: left-drag to use a tool, right/middle-drag to pan, wheel to zoom. Touch: use a tool with one finger, pan and pinch with two. Keys: 1–6 tools, Space pause, Ctrl+Z undo, T traffic view.'));
+        h('p', { class: 'tagline', style: 'font-size:13px' }, 'Mouse: left-drag to use a tool, right/middle-drag to pan, wheel to zoom. Touch: use a tool with one finger, pan and pinch with two. Keys: 1–6 tools, Space pause, Ctrl+Z undo, Ctrl+S save, T traffic view.'));
     } else if (view === 'settings') {
       const st = app.settings;
       const seg = (opts, cur, fn) => h('div', { class: 'seg', style: 'box-shadow:none;background:var(--line)' }, ...opts.map(([v, l]) => h('button', { class: cur === v ? 'on' : '', onclick: () => {
@@ -536,10 +596,10 @@ export class UI {
         h('div', { class: 'toggle-row' }, 'Theme', seg([['light', 'Light'], ['dark', 'Dark'], ['auto', 'Auto']], st.theme, (v) => app.setTheme(v))),
         h('div', { class: 'toggle-row' }, 'Graphics', seg([['auto', 'Auto'], ['low', 'Fast'], ['high', 'Sharp']], st.quality, (v) => app.setQuality(v))),
         h('div', { class: 'toggle-row' }, 'Sound', seg([[true, 'On'], [false, 'Off']], st.sound, (v) => app.setSound(v))),
-        h('div', { class: 'toggle-row' }, 'Saved city', h('button', { class: 'pill danger', onclick: () => {
+        h('div', { class: 'toggle-row' }, 'Autosave', h('button', { class: 'pill danger', onclick: () => {
           app.clearSave();
           this.renderMenu();
-        } }, 'Delete save')));
+        } }, 'Delete autosave')));
     }
   }
 }

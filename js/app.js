@@ -115,6 +115,7 @@ export class App {
       this.terrainMesh.dispose();
     }
     this.game = game;
+    this.currentSlot = null; // the manual slot this city was last saved to / loaded from (Ctrl+S target)
     this.terrainMesh = new TerrainMesh(this.view.scene, game.terrain, this.theme);
     game.on('rebuild', () => {
       this.roadsDirty = true;
@@ -151,26 +152,74 @@ export class App {
   }
 
   continueGame() {
-    const data = store.loadSave();
-    if (!data) return;
+    this.loadFrom(store.AUTOSAVE);
+  }
+
+  /** Replace the running game with a stored one (the autosave, or a manual slot number). */
+  loadFrom(id) {
+    const data = store.loadSlot(id);
+    if (!data) {
+      this.ui.toast('That save could not be loaded', 'error');
+      return false;
+    }
     try {
       const g = Game.fromSave(data);
       this.attachGame(g);
       if (data.view) this.view.setView(data.view.cx, data.view.cy, data.view.ppm);
       this.started = true;
       this.paused = false;
+      this.currentSlot = id === store.AUTOSAVE ? null : id;
       this.ui.showHud(true);
       this.ui.hideMenu();
       this.ui.updateSpeed();
       this.placedOnce = true;
+      if (id !== store.AUTOSAVE) this.ui.toast(`Loaded slot ${id}`, 'info');
+      return true;
     } catch (err) {
       console.error('could not load save', err);
       this.ui.toast('That save could not be loaded', 'error');
+      return false;
+    }
+  }
+
+  /** Write the running game into a manual slot and tell the player how it went. */
+  saveToSlot(i) {
+    if (!this.started || !this.game) return false;
+    const ok = store.writeSlot(i, this.game, this.view);
+    if (ok) {
+      this.currentSlot = i;
+      this.ui.toast(`Game saved · slot ${i}`, 'info');
+      if (!this.ui.el.menu.hidden) this.ui.renderMenu(); // the open save list shows the new slot
+    } else this.ui.toast('Could not save – storage is full or unavailable', 'error', 4200);
+    return ok;
+  }
+
+  /** Ctrl/Cmd+S: save into the slot this city was last saved to / loaded from, else the first free one. */
+  quickSave() {
+    if (!this.started || !this.game) return;
+    let slot = this.currentSlot;
+    if (!slot) {
+      const free = store.listSlots().find((s) => s.id !== store.AUTOSAVE && s.state === 'empty');
+      slot = free && free.id;
+    }
+    if (slot) this.saveToSlot(slot);
+    else {
+      this.ui.toast('All save slots are full – pick one to overwrite', 'info');
+      this.ui.showMenu('save');
     }
   }
 
   hasSave() {
     return store.hasSave();
+  }
+  hasAnySave() {
+    return store.hasAnySave();
+  }
+  listSlots() {
+    return store.listSlots();
+  }
+  deleteSlot(id) {
+    store.deleteSlot(id);
   }
   saveInfo() {
     return store.saveInfo();
