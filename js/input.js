@@ -24,7 +24,10 @@ export class Input {
     c.addEventListener('pointerup', (e) => this.onUp(e));
     c.addEventListener('pointercancel', (e) => this.onCancel(e));
     c.addEventListener('pointerleave', (e) => {
-      if (e.pointerType === 'mouse' && !this.ptrs.size) this.app.tool.deactivateHover && this.app.tool.deactivateHover();
+      if (e.pointerType === 'mouse' && !this.ptrs.size) {
+        this.lastMouse = null;
+        this.app.tool.deactivateHover && this.app.tool.deactivateHover();
+      }
     });
     c.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -229,6 +232,14 @@ export class Input {
         this.app.setTool(TOOL_KEYS[k]);
         return;
       }
+      if ((k === 'x' || k === 'X' || k === 'Delete') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+        // fast path to demolishing; X again steps through Click / Street / Area
+        const t = this.app.tool;
+        if (t.id === 'bulldoze' && k !== 'Delete' && !t.active) t.cycleMode();
+        else this.app.setTool('bulldoze');
+        return;
+      }
+      if (k === 'Shift' && !e.repeat && this.app.tool.id === 'bulldoze' && this.lastMouse && !this.ptrs.size && this.app.interactive()) this.app.tool.hover({ ...this.lastMouse, shift: true }); // the demolish preview follows Shift
       if (k === 't' || k === 'T') this.app.toggleFlow();
       if (k === 'Enter' && this.app.tool.finish) this.app.tool.finish();
       if (k === '+' || k === '=') this.app.view.zoomAt(this.app.view.w / 2, this.app.view.h / 2, 1.25);
@@ -237,6 +248,7 @@ export class Input {
     } else {
       if (k === ' ') this.space = false;
       this.keys.delete(k.toLowerCase());
+      if (k === 'Shift' && this.app.tool.id === 'bulldoze' && this.lastMouse && !this.ptrs.size && this.app.interactive()) this.app.tool.hover({ ...this.lastMouse, shift: false });
     }
   }
 

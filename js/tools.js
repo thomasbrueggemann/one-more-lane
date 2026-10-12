@@ -666,40 +666,81 @@ export class SignalTool extends Tool {
 
 /* ------------------------------------------------------------------ bulldoze */
 
+export const DEMOLISH_MODES = ['click', 'street', 'area'];
+const DEMO_RED = [0.88, 0.33, 0.29, 0.6];
+const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Three ways to demolish: 'click' removes the road piece (or building) under the pointer, tap or sweep; 'street'
+ * removes the whole street the pointer is on; 'area' drags a box and removes the roads (and optionally buildings)
+ * inside. Holding Shift in 'click' mode acts like 'street'. What gets removed is decided by RoadPlanner.streetRun /
+ * areaSelection and applied through Game.demolish, so everything here is only gestures and previews.
+ */
 export class BulldozeTool extends Tool {
   constructor(app) {
     super(app);
     this.id = 'bulldoze';
+    this.mode = 'click';
+    this.withBuildings = false; // area mode: take buildings along
     this.sweeping = false;
     this.undoTaken = false;
     this.target = null;
     this.touch = false;
+    this.box = null; // area mode: the rectangle being dragged {x0,y0,x1,y1,sx,sy}
+  }
+  get active() {
+    return !!this.box;
+  }
+  setMode(mode) {
+    this.cancel();
+    this.mode = mode;
+    this.app.ui.renderOptions();
+  }
+  cycleMode() {
+    this.setMode(DEMOLISH_MODES[(DEMOLISH_MODES.indexOf(this.mode) + 1) % DEMOLISH_MODES.length]);
+  }
+  setWithBuildings(on) {
+    this.withBuildings = on;
+    this.refresh();
+    this.app.ui.renderOptions();
+  }
+  activate() {
+    this.cancel();
   }
   cancel() {
     this.sweeping = false;
     this.target = null;
+    this.box = null;
     this.app.overlay.clear();
     this.app.hideTip();
   }
   abort() {
     this.sweeping = false;
+    this.box = null;
     this.app.overlay.clear();
     this.app.hideTip();
   }
   deactivateHover() {
-    if (this.sweeping) return;
+    if (this.sweeping || this.box) return;
     this.target = null;
     this.app.overlay.clear();
     this.app.hideTip();
   }
+  /** The options changed under a live preview. */
+  refresh() {
+    if (this.box) this.showBox(this.box.last);
+  }
   find(pt) {
+    if (this.mode === 'area') return null;
     for (const b of this.game.city.list) if (pointInRect(pt.x, pt.y, b.rect, 1.5)) return { kind: 'building', b };
     const hit = this.game.net.nearestEdge(pt.x, pt.y, clamp(this.tol(18), 3, 14), null);
-    if (hit && hit.gap < Math.max(2, this.tol(14))) return { kind: 'edge', edge: hit.edge };
+    if (hit && hit.gap < Math.max(2, this.tol(14))) {
+      const whole = this.mode === 'street' || pt.shift || hit.edge.ring != null;
+      return { kind: 'edge', edge: hit.edge, edges: whole ? this.planner.streetRun(hit.edge) : [hit.edge], whole: this.mode === 'street' || !!pt.shift };
+    }
     return null;
   }
   show(t, pt) {
-    const th = this.app.theme;
     const o = this.app.overlay;
     o.reset();
     this.target = t;
@@ -708,21 +749,22 @@ export class BulldozeTool extends Tool {
       this.app.hideTip();
       return;
     }
-    const red = [0.88, 0.33, 0.29, 0.6];
     if (t.kind === 'building') {
-      o.rect(t.b.rect, red);
+      o.rect(t.b.rect, DEMO_RED);
       this.app.tip([{ t: `Pick up ${BUILDING_TYPES[t.b.type].name.toLowerCase()}` }], pt.sx, pt.sy);
     } else {
-      const list = t.edge.ring != null ? [...this.game.net.edges.values()].filter((e) => e.ring === t.edge.ring) : [t.edge];
-      let refund = 0;
-      for (const e of list) {
-        o.road(e.poly, e.halfWidth + 0.3, red);
-        refund += e.value * 0.5;
+      let len = 0;
+      for (const e of t.edges) {
+        o.road(e.poly, e.halfWidth + 0.3, DEMO_RED);
+        len += e.len;
       }
-      this.app.tip([{ t: t.edge.ring != null ? 'Remove roundabout' : 'Remove road' }, ...(this.game.free ? [] : [{ t: `+${fmtMoney(refund)}`, kind: 'cost' }])], pt.sx, pt.sy);
+      const label = t.edge.ring != null ? 'Remove roundabout' : t.whole ? 'Remove street' : 'Remove road';
+      const chips = [{ t: label }];
+      if (t.whole && t.edge.ring == null) chips.push({ t: `${Math.round(len)} m` });
+      if (!this.game.free) chips.push({ t: `+${fmtMoney(this.planner.refundFor(t.edges))}`, kind: 'cost' });
+      this.app.tip(chips, pt.sx, pt.sy);
     }
     o.commit();
-    void th;
   }
   apply(t, quiet = false) {
     if (!t || !(t.kind === 'building' ? t.b.alive : t.edge.alive)) return;
@@ -732,14 +774,74 @@ export class BulldozeTool extends Tool {
       this.undoTaken = true;
     }
     if (t.kind === 'building') this.game.removeBuilding(t.b, !quiet);
-    else this.game.bulldozeEdge(t.edge, !quiet);
+    else this.game.demolish({ edges: t.edges }, !quiet);
     this.app.beep('remove');
   }
+
+  /* ---- area mode ---- */
+
+  showBox(pt) {
+    const bx = this.box;
+    bx.last = pt;
+    bx.x1 = pt.x;
+    bx.y1 = pt.y;
+    const sel = this.planner.areaSelection(bx, this.withBuildings);
+    bx.sel = sel;
+    const o = this.app.overlay;
+    o.reset();
+    const x0 = Math.min(bx.x0, bx.x1);
+    const x1 = Math.max(bx.x0, bx.x1);
+    const y0 = Math.min(bx.y0, bx.y1);
+    const y1 = Math.max(bx.y0, bx.y1);
+    o.rect({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, hw: (x1 - x0) / 2, hd: (y1 - y0) / 2, c: 1, s: 0 }, [0.88, 0.33, 0.29, 0.12]);
+    for (const e of sel.edges) o.road(e.poly, e.halfWidth + 0.3, DEMO_RED);
+    for (const b of sel.buildings) o.rect(b.rect, DEMO_RED);
+    const ppm = this.app.view.ppm;
+    const edge = [0.88, 0.33, 0.29, 0.95];
+    const w = 2 / ppm;
+    for (const [ax, ay, bx2, by2] of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) o.dashed(ax, ay, bx2, by2, w, 8 / ppm, 5 / ppm, edge);
+    o.commit();
+    const chips = [];
+    if (sel.edges.length) chips.push({ t: plural(sel.streets, 'street') });
+    if (sel.buildings.length) chips.push({ t: plural(sel.buildings.length, 'building') });
+    if (sel.edges.length && !this.game.free) chips.push({ t: `+${fmtMoney(sel.refund)}`, kind: 'cost' });
+    this.app.tip(chips.length ? chips : [{ t: 'Nothing to remove' }], pt.sx, pt.sy);
+  }
+  finishBox(pt) {
+    const bx = this.box;
+    this.box = null;
+    this.app.overlay.clear();
+    this.app.hideTip();
+    if (Math.hypot(pt.sx - bx.sx, pt.sy - bx.sy) < DRAG_PX) {
+      this.app.hint('Drag a box over the roads you want to remove');
+      return;
+    }
+    const sel = this.planner.areaSelection({ x0: bx.x0, y0: bx.y0, x1: pt.x, y1: pt.y }, this.withBuildings);
+    const r = this.game.demolishArea(sel);
+    if (!r.ok) {
+      this.app.hint('Nothing to remove there');
+      return;
+    }
+    this.app.beep('remove');
+    const parts = [];
+    if (r.roads) parts.push(plural(sel.streets, 'street'));
+    if (r.buildings) parts.push(plural(r.buildings, 'building'));
+    this.app.toast(`Removed ${parts.join(' and ')}. Undo brings them back`, 'info');
+  }
+
+  /* ---- pointer ---- */
+
   hover(pt) {
+    if (this.mode === 'area') return;
     this.show(this.find(pt), pt);
   }
   down(pt) {
     this.touch = pt.type !== 'mouse';
+    if (this.mode === 'area') {
+      this.box = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, sx: pt.sx, sy: pt.sy, last: pt };
+      this.showBox(pt);
+      return;
+    }
     const t = this.find(pt);
     this.show(t, pt);
     if (!this.touch) {
@@ -750,6 +852,10 @@ export class BulldozeTool extends Tool {
     }
   }
   move(pt) {
+    if (this.box) {
+      this.showBox(pt);
+      return;
+    }
     const t = this.find(pt);
     if (this.sweeping) {
       this.apply(t, true);
@@ -757,6 +863,10 @@ export class BulldozeTool extends Tool {
     } else this.show(t, pt);
   }
   up(pt) {
+    if (this.box) {
+      this.finishBox(pt);
+      return;
+    }
     if (this.sweeping) {
       this.sweeping = false;
       this.app.overlay.clear();

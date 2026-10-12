@@ -240,6 +240,37 @@ export class Game {
     return { ok: true, refund };
   }
 
+  /**
+   * Demolish several roads and buildings as ONE undo step with a single network rebuild (the simulation drops the
+   * vehicles on the removed roads). Roads refund through the city's money; buildings go back to the tray.
+   * `undo` false leaves the undo step to the caller (a sweep that already took one).
+   */
+  demolish({ edges = [], buildings = [] }, undo = true) {
+    const roads = edges.filter((e) => e.alive);
+    const homes = buildings.filter((b) => this.city.has(b));
+    if (!roads.length && !homes.length) return { ok: false, error: 'nothing' };
+    if (undo) this.pushUndo();
+    let refund = 0;
+    let count = 0;
+    if (roads.length) ({ refund, count } = this.planner.removeEdges(roads));
+    let picked = 0;
+    for (const b of homes) if (this.city.removeBuilding(b)) picked++;
+    this.city.money += refund;
+    this.emit('money');
+    if (picked) this.emit('buildings');
+    return { ok: true, refund, roads: count, buildings: picked };
+  }
+
+  /** Remove the whole street an edge belongs to (see RoadPlanner.streetRun). */
+  bulldozeStreet(edge) {
+    return this.demolish({ edges: this.planner.streetRun(edge) });
+  }
+
+  /** Remove everything an area selection (RoadPlanner.areaSelection) picked. */
+  demolishArea(sel) {
+    return this.demolish({ edges: sel.edges, buildings: sel.buildings });
+  }
+
   placeBuilding(pl) {
     if (!pl.ok) return { ok: false, error: pl.reason };
     if (this.city.available(pl.type) <= 0) return { ok: false, error: 'tray_empty' };

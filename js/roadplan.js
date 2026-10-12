@@ -14,6 +14,8 @@ export const SIGNAL_COST = 1500;
 export const ROUNDABOUT_BASE_COST = 600;
 export const REFUND = 0.5;
 const RING_MIN_LANE = 10; // ring segments shorter than this jam up
+const STREET_STRAIGHT = 0.44; // ~25 degrees: how far a street may bend at a junction and still count as the same street
+const STREET_BEND = 1.22; // ~70 degrees: the same where only two roads meet
 
 export const ERROR_TEXT = {
   too_short: 'Too short',
@@ -508,12 +510,24 @@ export class RoadPlanner {
 
   /** Remove an edge (or the whole roundabout when it is a ring arc). Returns refund and info. */
   removeEdge(edge) {
+    return this.removeEdges([edge]);
+  }
+
+  /**
+   * Remove many edges with one network rebuild (a roundabout always goes as a whole). Returns refund and info;
+   * traffic and signals are patched by the single rebuild exactly as for one edge.
+   */
+  removeEdges(edges) {
     const net = this.net;
-    const list = [];
-    if (edge.ring != null) {
-      for (const e of net.edges.values()) if (e.ring === edge.ring) list.push(e);
-      net.roundabouts.delete(edge.ring);
-    } else list.push(edge);
+    const list = new Set();
+    const rings = new Set();
+    for (const e of edges) {
+      if (!e.alive) continue;
+      if (e.ring != null) rings.add(e.ring);
+      else list.add(e);
+    }
+    if (rings.size) for (const e of net.edges.values()) if (rings.has(e.ring)) list.add(e);
+    for (const id of rings) net.roundabouts.delete(id);
     let refund = 0;
     const nodes = new Set();
     for (const e of list) {
@@ -528,7 +542,114 @@ export class RoadPlanner {
     }
     const info = net.rebuild();
     this.fixSignals(info);
-    return { refund, info };
+    return { refund, info, count: list.size };
+  }
+
+  /** Money back for removing these edges (roundabout arcs count with the whole ring). */
+  refundFor(edges) {
+    const list = new Set(edges);
+    for (const e of edges) if (e.ring != null) for (const r of this.ringEdges(e.ring)) list.add(r);
+    let refund = 0;
+    for (const e of list) refund += e.value * REFUND;
+    return refund;
+  }
+
+  ringEdges(ring) {
+    const out = [];
+    for (const e of this.net.edges.values()) if (e.ring === ring) out.push(e);
+    return out;
+  }
+
+  /**
+   * The whole street an edge belongs to. From both ends it follows the road through junctions where it carries on
+   * in a near-straight line with the same class and lanes, until the road ends or meets a junction it does not pass
+   * straight through (a T, a class change, a roundabout). A roundabout is one unit.
+   */
+  streetRun(edge) {
+    if (edge.ring != null) return this.ringEdges(edge.ring);
+    const run = [edge];
+    const seen = new Set(run);
+    for (const start of [edge.a, edge.b]) {
+      let cur = edge;
+      let node = start;
+      for (;;) {
+        const next = this.continuation(cur, node);
+        if (!next || seen.has(next)) break;
+        seen.add(next);
+        run.push(next);
+        node = next.other(node);
+        cur = next;
+      }
+    }
+    return run;
+  }
+
+  /** The edge that carries `cur` on past `node`, or null when the street stops there. */
+  continuation(cur, node) {
+    if (node.ring != null || node.edges.length < 2) return null;
+    const ends = this.net.endsOf(node);
+    const mine = ends.find((en) => en.edge === cur);
+    if (!mine) return null;
+    const lanes = (e, from) => (e.a === from ? [e.lf, e.lb] : [e.lb, e.lf]);
+    const [inF, inB] = lanes(cur, cur.other(node)); // lanes in the direction of travel towards `node`
+    let best = null;
+    let bestDev = Infinity;
+    for (const en of ends) {
+      if (en === mine) continue;
+      const dev = Math.acos(clamp(-(en.dx * mine.dx + en.dy * mine.dy), -1, 1)); // 0 = dead straight on
+      if (dev < bestDev) {
+        bestDev = dev;
+        best = en;
+      }
+    }
+    if (!best || bestDev > (ends.length === 2 ? STREET_BEND : STREET_STRAIGHT)) return null;
+    const e = best.edge;
+    if (e.cls !== cur.cls || e.ring != null) return null;
+    const [outF, outB] = lanes(e, node);
+    return outF === inF && outB === inB ? e : null;
+  }
+
+  /**
+   * What an axis-aligned world rectangle {x0,y0,x1,y1} would demolish: every road with at least half of its length
+   * inside (a roundabout counts when half of the ring does) and, optionally, buildings whose centre is inside.
+   */
+  areaSelection(r, withBuildings = false) {
+    const x0 = Math.min(r.x0, r.x1);
+    const x1 = Math.max(r.x0, r.x1);
+    const y0 = Math.min(r.y0, r.y1);
+    const y1 = Math.max(r.y0, r.y1);
+    const box = { x0, y0, x1, y1 };
+    const edges = [];
+    const rings = new Map(); // ring id -> {len, inside, edges}
+    for (const e of this.net.edges.values()) {
+      const bb = this.net.bboxOf(e);
+      const overlap = !(bb.x1 < x0 || bb.x0 > x1 || bb.y1 < y0 || bb.y0 > y1);
+      if (!overlap && e.ring == null) continue;
+      const inside = overlap ? insideLen(e.poly, box) : 0;
+      if (e.ring == null) {
+        if (inside * 2 >= e.len) edges.push(e);
+        continue;
+      }
+      let g = rings.get(e.ring);
+      if (!g) rings.set(e.ring, (g = { len: 0, inside: 0, edges: [] }));
+      g.len += e.len;
+      g.inside += inside;
+      g.edges.push(e);
+    }
+    for (const g of rings.values()) if (g.inside * 2 >= g.len) edges.push(...g.edges);
+    const buildings = [];
+    if (withBuildings) for (const b of this.world.buildings()) if (b.x >= x0 && b.x <= x1 && b.y >= y0 && b.y <= y1) buildings.push(b);
+    // a street cut into pieces by junctions still counts once
+    let streets = 0;
+    let length = 0;
+    const counted = new Set();
+    for (const e of edges) {
+      length += e.len;
+      if (counted.has(e)) continue;
+      streets++;
+      for (const m of this.streetRun(e)) counted.add(m);
+    }
+    return { edges, buildings, streets, length, refund: this.refundFor(edges) };
   }
 
   /* ------------------------------------------------------------ roundabouts */
@@ -800,4 +921,31 @@ export class RoadPlanner {
     this.fixSignals(info);
     return { id, nodes: rn, edges: ringEdges, info };
   }
+}
+
+/** Length of a polyline inside an axis-aligned box (Liang-Barsky clipping per segment). */
+function insideLen(poly, b) {
+  let total = 0;
+  for (let i = 0; i < poly.n - 1; i++) {
+    const ax = poly.xs[i];
+    const ay = poly.ys[i];
+    const dx = poly.xs[i + 1] - ax;
+    const dy = poly.ys[i + 1] - ay;
+    let t0 = 0;
+    let t1 = 1;
+    const clip = (p, q) => {
+      if (p === 0) return q >= 0;
+      const t = q / p;
+      if (p < 0) {
+        if (t > t1) return false;
+        if (t > t0) t0 = t;
+      } else {
+        if (t < t0) return false;
+        if (t < t1) t1 = t;
+      }
+      return true;
+    };
+    if (clip(-dx, ax - b.x0) && clip(dx, b.x1 - ax) && clip(-dy, ay - b.y0) && clip(dy, b.y1 - ay)) total += (t1 - t0) * Math.hypot(dx, dy);
+  }
+  return total;
 }

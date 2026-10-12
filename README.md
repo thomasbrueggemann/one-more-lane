@@ -26,7 +26,7 @@ plain static files to **GitHub Pages**.
 | **Round** | Tap a junction or open ground for a roundabout, drag to set its size. |
 | **Lanes** | Point at the side of a road to add (or remove) a lane. |
 | **Lights** | Tap a junction to install traffic lights, tap again to edit them: phase durations (lights are actuated, so a green ends early when nobody is waiting), protected left turns, and tap any arrow on the map to move that movement into the selected phase. |
-| **Remove** | Tap or drag over roads and buildings (half the money back; buildings return to the tray). |
+| **Remove** | Three modes in the options row. **Click**: tap or drag over single roads and buildings (hold `Shift` to take the whole street). **Street**: tap a road to remove its entire street, followed straight through junctions until it ends, turns off or changes class/lanes (the preview shows the full run and the refund). **Area**: drag a box to remove every road mostly inside it, and with *Buildings too* the buildings as well (live red preview with a count and refund). Half the money comes back, buildings return to the tray, and one Undo restores a whole street or area. |
 | **Build tray** | Tap a building type, then tap next to a street; drag along a road to place a row. |
 
 Residents drive to work and to the shops (and trucks deliver goods) using routes that adapt to current traffic. Smooth trips
@@ -36,7 +36,7 @@ connected to a road, orange ones show unhappy residents stuck in traffic. The ga
 Pick **Free play** on the New city screen to build without money limits: nothing costs anything and the HUD shows ∞ instead of a
 balance. Levels and the building tray still progress as usual.
 
-* **Mouse:** left-drag uses the tool, right/middle-drag pans, wheel zooms. Keys: `1`–`6` tools, `Space` pause, `Ctrl+Z` undo, `Ctrl+S` save, `T` traffic view, `Esc` cancel, WASD/arrows pan.
+* **Mouse:** left-drag uses the tool, right/middle-drag pans, wheel zooms. Keys: `1`–`6` tools, `X` / `Delete` the Remove tool (`X` again cycles Click / Street / Area), `Space` pause, `Ctrl+Z` undo, `Ctrl+S` save, `T` traffic view, `Esc` cancel, WASD/arrows pan.
 * **Touch:** one finger uses the tool, two fingers pan and pinch to zoom. Building ghosts float above your fingertip so you can see them.
 * **Saving:** your city is autosaved to the browser every 20 seconds (start screen: *Continue*). For saves you control, open the menu and
   choose *Save game* (three slots, or `Ctrl/Cmd+S` to save again to the same slot); *Load game* on the menu and the start screen lists

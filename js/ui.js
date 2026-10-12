@@ -43,6 +43,7 @@ const HOW_TO = [
   ['Place buildings', 'Your city grows in batches. Tap a building in the <b>tray</b> then tap next to a street. Drag along a road to place a whole row.'],
   ['Watch the traffic', 'Residents drive to work, shops and back. Slow, jammed trips make them unhappy (look for the red badges).'],
   ['Fix jams', 'Use <b>Round</b> for roundabouts, <b>Lights</b> for traffic signals (tap again to edit phases), <b>Lanes</b> to widen roads, and raise roads to cross over others.'],
+  ['Tear down', 'Press <b>X</b> for <b>Remove</b>. <i>Click</i> takes one road or building, <i>Street</i> a whole street, <i>Area</i> everything in a box you drag. Undo restores it in one step.'],
   ['Level up', 'Smooth trips earn progress. Every level brings more buildings and a bonus. There is no game over, so one more lane is always an option.'],
 ];
 
@@ -247,7 +248,16 @@ export class UI {
     } else if (tool.id === 'signal') {
       el.append(h('span', { class: 'hint-text' }, `Tap a junction to install lights${this.app.game.free ? '' : ` (${fmtMoney(1500)})`}. Tap lights again to configure.`));
     } else if (tool.id === 'bulldoze') {
-      el.append(h('span', { class: 'hint-text' }, 'Tap or drag over roads and buildings. Half the cost is refunded.'));
+      const hints = {
+        click: 'Tap or drag over single roads and buildings. Hold Shift for a whole street.',
+        street: 'Tap a road to remove its whole street, straight through junctions.',
+        area: 'Drag a box: roads mostly inside go. One Undo brings everything back.',
+      };
+      el.append(
+        group('', ...[['click', 'Click'], ['street', 'Street'], ['area', 'Area']].map(([m, n]) => pill(n, tool.mode === m, () => tool.setMode(m)))),
+        ...(tool.mode === 'area' ? [group('', pill('Buildings too', tool.withBuildings, () => tool.setWithBuildings(!tool.withBuildings)))] : []),
+        h('span', { class: 'hint-text' }, `${hints[tool.mode]}${app.game.free ? '' : ' Half the cost is refunded.'} Key: X.`),
+      );
     } else if (tool.id === 'build') {
       const spec = BUILDING_TYPES[tool.type];
       el.append(
