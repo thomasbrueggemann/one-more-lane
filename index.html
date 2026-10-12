@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1, minimum-scale=1">
+  <title>One More Lane</title>
+  <meta name="description" content="A tiny, gridless road-building traffic game. Draw roads, fix jams with roundabouts, traffic lights and interchanges, and keep the city moving.">
+  <meta name="theme-color" content="#ebe9e3">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="One More Lane">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="preload" href="fonts/outfit-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="gl" aria-label="City map"></canvas>
+
+  <div id="tip" class="tip" hidden></div>
+
+  <div id="hud" class="hud" hidden>
+    <div class="top-left">
+      <div class="chip money" title="Money">
+        <span class="coin">$</span>
+        <b id="money-val">$0</b>
+        <small id="income-val"></small>
+      </div>
+      <div class="chip level" title="Level progress: keep traffic flowing to level up and receive more buildings">
+        <div class="lvl-row"><b id="level-val">Level 0</b><small id="pop-val"></small></div>
+        <div class="bar"><i id="xp-bar"></i></div>
+      </div>
+    </div>
+    <div class="top-right">
+      <button class="icon-btn" id="btn-undo" aria-label="Undo" title="Undo (Ctrl+Z)"></button>
+      <div class="seg" id="speed" role="group" aria-label="Game speed"></div>
+      <button class="icon-btn" id="btn-flow" aria-label="Traffic view" title="Traffic view (T)"></button>
+      <button class="icon-btn" id="btn-menu" aria-label="Menu" title="Menu"></button>
+    </div>
+    <div class="tray panel" id="tray" aria-label="Buildings to place"></div>
+    <div class="bottom">
+      <div class="options panel" id="options" hidden></div>
+      <nav class="toolbar panel" id="toolbar" aria-label="Tools"></nav>
+    </div>
+    <div class="panel side-panel" id="signal-panel" hidden></div>
+    <div class="panel info-panel" id="info-panel" hidden></div>
+  </div>
+
+  <div id="hint" class="hint" hidden></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <div id="menu" class="menu" hidden>
+    <div class="menu-card" id="menu-card"></div>
+  </div>
+
+  <noscript><p style="font:16px system-ui;padding:24px">One More Lane needs JavaScript.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

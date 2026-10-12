@@ -1,0 +1,13 @@
+{
+  "name": "one-more-lane",
+  "version": "1.0.0",
+  "description": "A top-down, gridless road-building traffic game. Three.js, installable PWA.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build:sw": "node tools/build-sw.mjs",
+    "icons": "node tools/make-icons.mjs"
+  }
+}

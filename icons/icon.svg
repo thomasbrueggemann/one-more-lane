@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="113" fill="#ebe9e3"/>
+  <g stroke="#8d8d8d" stroke-width="10" stroke-linejoin="round" fill="none">
+    <circle cx="256" cy="256" r="131" stroke-width="88.064"/>
+    <path d="M256 0V125M256 387V512M0 256H125M387 256H512" stroke-width="82.944" stroke-linecap="butt"/>
+  </g>
+  <g stroke="#fff" fill="none">
+    <circle cx="256" cy="256" r="131" stroke-width="76.8"/>
+    <path d="M256 0V125M256 387V512M0 256H125M387 256H512" stroke-width="71.68"/>
+  </g>
+  <circle cx="256" cy="256" r="86.52799999999999" fill="#c8e3a2"/>
+  <g fill="none" stroke="#e5c445" stroke-width="5" stroke-dasharray="14 14">
+    <path d="M256 12V118M256 394V500M12 256H118M394 256H500"/>
+  </g>
+  <rect x="311.1573974574179" y="140.72883867903576" width="52" height="26" rx="9" fill="#e8789b" transform="rotate(-51.566187819224965 337.1573974574179 153.72883867903576)"/>
+  <rect x="129.43860747158354" y="326.2665595106808" width="52" height="26" rx="9" fill="#3f72de" transform="rotate(140.37474218077503 155.43860747158354 339.2665595106808)"/>
+  <rect x="341.30560160008906" y="311.24204460918685" width="52" height="26" rx="9" fill="#f08c3a" transform="rotate(31.51272218077503 367.30560160008906 324.24204460918685)"/>
+</svg>

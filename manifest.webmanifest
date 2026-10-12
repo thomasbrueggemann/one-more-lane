@@ -1,0 +1,20 @@
+{
+  "name": "One More Lane",
+  "short_name": "One More Lane",
+  "description": "A tiny, gridless road-building traffic game. Draw roads, fix jams with roundabouts, signals and interchanges, and keep the city moving.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ebe9e3",
+  "theme_color": "#ebe9e3",
+  "categories": ["games", "simulation"],
+  "lang": "en",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
