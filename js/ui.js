@@ -580,7 +580,7 @@ export class UI {
           o.seed = Math.floor(Math.random() * 999999);
           input.value = String(o.seed);
         } }))),
-        replaces ? h('p', { class: 'tagline', style: 'font-size:13px;margin:0 0 10px' }, `A new city replaces your autosave (${app.saveInfo()}). Cities saved to a slot stay put.`) : null,
+        replaces ? h('p', { class: 'tagline', style: 'font-size:13px;margin:0 0 10px' }, `A new city replaces your autosave (${app.saveInfo()}). Cities saved to a slot stay put.`) : '',
         h('button', { class: 'big-btn ' + (replaces && this.confirmNew ? 'danger' : 'primary'), style: 'width:100%', onclick: () => {
           if (replaces && !this.confirmNew) {
             this.confirmNew = true;
