@@ -4,7 +4,9 @@ import { makeWorld, road, free, accessPoints, run, overlaps } from './simlib.mjs
 import { Game } from '../js/game.js';
 import { DT } from '../js/sim.js';
 import { REFUND, ROUNDABOUT_BASE_COST } from '../js/roadplan.js';
-import { CLASSES } from '../js/network.js';
+import { CLASSES, Network } from '../js/network.js';
+import { Poly } from '../js/geom.js';
+import { buildNodeParts } from '../js/render/roadgeom.js';
 import { Rng } from '../js/util.js';
 import { THEMES } from '../js/render/theme.js';
 import { splitMovement } from '../js/signaledit.js';
@@ -427,6 +429,76 @@ await section('8f. the road tool keeps its anchor when the mouse leaves the map'
   fire('pointerleave', 7, 'mouse', 60, 10);
   assert.equal(state.tip, false, 'the preview goes');
   assert.ok(app.tools.road.pen, 'the anchor stays');
+});
+
+// ---- 9. a junction on a curved road (a ring) meets the trimmed road exactly and does not pave the inside of the bend
+await section('9. a junction on a curved road meets the trimmed road and does not pave the inside of the bend', async () => {
+  const arc = (a0, a1) => new Poly(Array.from({ length: 41 }, (_, i) => ({ x: -40 + Math.cos(a0 + ((a1 - a0) * i) / 40) * 40, y: Math.sin(a0 + ((a1 - a0) * i) / 40) * 40 })));
+  const opts = { lf: 1, lb: 1, cls: 'street' };
+  for (const deg of [8, 20, 45]) {
+    const net = new Network();
+    const c = net.addNode(0, 0);
+    const up = net.addNode(-40 + Math.cos(2) * 40, Math.sin(2) * 40);
+    const dn = net.addNode(-40 + Math.cos(-2) * 40, Math.sin(-2) * 40);
+    net.addEdge(c, up, arc(0, 2), opts);
+    net.addEdge(dn, c, arc(-2, 0), opts);
+    // a side road leaving at a shallow angle to the ring forces a long setback on the curved arm
+    const a = Math.PI / 2 - (deg * Math.PI) / 180;
+    const far = net.addNode(Math.cos(a) * 100, Math.sin(a) * 100);
+    net.addEdge(c, far, new Poly([{ x: 0, y: 0 }, { x: far.x, y: far.y }]), opts);
+    net.rebuild();
+    const P = c.fill.pts;
+    for (const e of c.edges) {
+      const p = e.poly.pointAt(e.a === c ? e.setA : e.len - e.setB);
+      for (const sg of [1, -1]) {
+        const q = { x: p.x + p.ty * e.halfWidth * sg, y: p.y - p.tx * e.halfWidth * sg };
+        const d = Math.min(...P.map((v) => Math.hypot(v.x - q.x, v.y - q.y)));
+        assert.ok(d < 0.01, `${deg}°: the junction patch reaches the kerb of edge ${e.id} where it is trimmed (${d.toFixed(2)} m off)`);
+      }
+    }
+    // a point inside the bend, well clear of the ring's inner kerb, must stay grass
+    const g = { x: -12, y: 0 };
+    const tri = buildNodeParts(c, THEMES.light).fill.p;
+    const side = (ax, ay, bx, by) => (bx - ax) * (g.y - ay) - (by - ay) * (g.x - ax);
+    for (let i = 0; i < tri.length; i += 9) {
+      const [ax, ay, , bx, by, , cx, cy] = tri.slice(i, i + 9);
+      const s1 = side(ax, ay, bx, by);
+      const s2 = side(bx, by, cx, cy);
+      const s3 = side(cx, cy, ax, ay);
+      assert.ok(!((s1 > 0 && s2 > 0 && s3 > 0) || (s1 < 0 && s2 < 0 && s3 < 0)), `${deg}°: the junction patch paves the inside of the ring`);
+    }
+  }
+});
+
+await section('9b. a branch that leaves a straight road almost parallel and bends away hard stays attached', async () => {
+  const opts = { lf: 1, lb: 1, cls: 'street' };
+  for (const [deg, R] of [[15, 30], [25, 20]]) {
+    const net = new Network();
+    const m = (40 * Math.PI) / 180;
+    const c = net.addNode(0, 0);
+    const ur = net.addNode(Math.cos(m) * 70, Math.sin(m) * 70);
+    const ll = net.addNode(-Math.cos(m) * 70, -Math.sin(m) * 70);
+    net.addEdge(c, ur, new Poly([{ x: 0, y: 0 }, { x: ur.x, y: ur.y }]), opts);
+    net.addEdge(ll, c, new Poly([{ x: ll.x, y: ll.y }, { x: 0, y: 0 }]), opts);
+    // the branch starts deg below the main road and turns clockwise through 150 degrees
+    const h0 = m - (deg * Math.PI) / 180;
+    const ox = Math.cos(h0 - Math.PI / 2) * R;
+    const oy = Math.sin(h0 - Math.PI / 2) * R;
+    const pts = Array.from({ length: 61 }, (_, i) => {
+      const a = h0 + Math.PI / 2 - (i / 60) * ((150 * Math.PI) / 180);
+      return { x: ox + Math.cos(a) * R, y: oy + Math.sin(a) * R };
+    });
+    const end = net.addNode(pts[60].x, pts[60].y);
+    const br = net.addEdge(c, end, new Poly(pts), opts);
+    net.rebuild();
+    assert.ok(br.setA > 15, `${deg}°: the branch gets a long setback (${br.setA.toFixed(1)} m)`);
+    const p = br.poly.pointAt(br.setA);
+    for (const sg of [1, -1]) {
+      const q = { x: p.x + p.ty * br.halfWidth * sg, y: p.y - p.tx * br.halfWidth * sg };
+      const d = Math.min(...c.fill.pts.map((v) => Math.hypot(v.x - q.x, v.y - q.y)));
+      assert.ok(d < 0.01, `${deg}°: the junction patch reaches the branch's kerb where it is trimmed (${d.toFixed(2)} m off)`);
+    }
+  }
 });
 
 if (failures.length) throw new Error(`regression tests failed: ${failures.join('; ')}`);

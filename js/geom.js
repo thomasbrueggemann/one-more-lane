@@ -475,3 +475,66 @@ export function convexHull(points) {
   lower.pop();
   return lower.concat(upper);
 }
+
+/**
+ * Ear-clipping triangulation of a simple CCW polygon of {x,y} points. Returns index triples, or null when the
+ * polygon is not simple enough to clip completely.
+ */
+export function triangulate(P) {
+  const n = P.length;
+  if (n < 3) return [];
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const idx = [];
+  // drop repeated points, which have no ear of their own
+  for (let i = 0; i < n; i++) {
+    const q = P[(i + n - 1) % n];
+    if (Math.hypot(P[i].x - q.x, P[i].y - q.y) > 1e-6) idx.push(i);
+  }
+  const tris = [];
+  let guard = idx.length * idx.length + 10;
+  while (idx.length > 3 && guard-- > 0) {
+    let clipped = false;
+    for (let k = 0; k < idx.length; k++) {
+      const ia = idx[(k + idx.length - 1) % idx.length];
+      const ib = idx[k];
+      const ic = idx[(k + 1) % idx.length];
+      const a = P[ia];
+      const b = P[ib];
+      const c = P[ic];
+      const cr = cross(a, b, c);
+      if (cr < -1e-9) continue; // reflex
+      if (cr <= 1e-9) {
+        // collinear: drop the middle point
+        idx.splice(k, 1);
+        clipped = true;
+        break;
+      }
+      let inside = false;
+      for (const im of idx) {
+        if (im === ia || im === ib || im === ic) continue;
+        const m = P[im];
+        if (cross(a, b, m) >= 0 && cross(b, c, m) >= 0 && cross(c, a, m) >= 0) {
+          inside = true;
+          break;
+        }
+      }
+      if (inside) continue;
+      tris.push([ia, ib, ic]);
+      idx.splice(k, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) return null;
+  }
+  if (idx.length === 3) tris.push([idx[0], idx[1], idx[2]]);
+  // a self-intersecting outline can still clip, but then the triangles don't add up to its area
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const q = P[(i + 1) % n];
+    area += P[i].x * q.y - q.x * P[i].y;
+  }
+  let sum = 0;
+  for (const [a, b, c] of tris) sum += Math.abs(cross(P[a], P[b], P[c]));
+  if (Math.abs(sum - area) > 0.5 + 0.01 * Math.abs(area)) return null;
+  return tris;
+}

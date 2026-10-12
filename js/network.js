@@ -170,7 +170,9 @@ export class Conn {
 
 /**
  * Build the polygon that joins the arms of a junction and the setback (stop-line distance) of every arm.
- * ends: [{dx,dy,h,ang}] sorted by ang ascending (outward unit direction, half width).
+ * ends: [{dx,dy,h,ang,at?}] sorted by ang ascending (outward unit direction, half width). The optional
+ * at(s, o) fills o with the centreline point {x,y} and outward unit direction {dx,dy} at distance s along a
+ * curved arm, so the polygon meets the road exactly where the edge is trimmed (without it arms are straight rays).
  * Returns { setbacks, pts, chains } where pts is a CCW polygon and chains are the outer boundary
  * polylines (corner fillets) that need a kerb stroke.
  */
@@ -234,13 +236,23 @@ export function computeJunction(cx, cy, ends, fillet = FILLET_R) {
   // polygon: R_i, L_i, then the corner chain to R_(i+1)
   const R = [];
   const L = [];
+  const D = []; // outward direction of each arm at its mouth
+  const o = { x: 0, y: 0, dx: 0, dy: 0 };
   for (let i = 0; i < k; i++) {
     const e = ends[i];
     const s = out.setbacks[i];
-    const nlx = -e.dy;
-    const nly = e.dx;
-    R.push({ x: cx + e.dx * s - nlx * e.h, y: cy + e.dy * s - nly * e.h });
-    L.push({ x: cx + e.dx * s + nlx * e.h, y: cy + e.dy * s + nly * e.h });
+    if (e.at) e.at(s, o);
+    else {
+      o.x = cx + e.dx * s;
+      o.y = cy + e.dy * s;
+      o.dx = e.dx;
+      o.dy = e.dy;
+    }
+    const nlx = -o.dy;
+    const nly = o.dx;
+    R.push({ x: o.x - nlx * e.h, y: o.y - nly * e.h });
+    L.push({ x: o.x + nlx * e.h, y: o.y + nly * e.h });
+    D.push({ x: o.dx, y: o.dy });
   }
   const pts = [];
   for (let i = 0; i < k; i++) {
@@ -249,22 +261,70 @@ export function computeJunction(cx, cy, ends, fillet = FILLET_R) {
     pts.push(R[i], L[i]);
     const chain = [L[i]];
     if (c.convex) {
-      const q = quadPoints(L[i], { x: c.x, y: c.y }, R[j], 8);
+      const q = quadPoints(L[i], filletControl(L[i], D[i], R[j], D[j], c), R[j], 8);
       for (let m = 1; m < q.length - 1; m++) chain.push(q[m]);
       for (let m = 1; m < q.length - 1; m++) pts.push(q[m]);
-    } else if (!c.par && c.phi > Math.PI + 0.03 && c.t < 0 && c.u < 0) {
-      const dist = Math.hypot(c.x - cx, c.y - cy);
-      const limit = 2.6 * Math.max(ends[i].h, ends[j].h) + 2;
-      if (dist < limit) {
-        chain.push({ x: c.x, y: c.y });
-        pts.push({ x: c.x, y: c.y });
+    } else {
+      // no fillet: a curved arm's kerb is followed back to the node, so the patch hugs the inside of the bend
+      // instead of cutting a chord across it
+      const add = (q) => {
+        chain.push(q);
+        pts.push(q);
+      };
+      for (const q of armBorder(ends[i], out.setbacks[i], 1)) add(q);
+      if (!c.par && c.phi > Math.PI + 0.03 && c.t < 0 && c.u < 0) {
+        const dist = Math.hypot(c.x - cx, c.y - cy);
+        const limit = 2.6 * Math.max(ends[i].h, ends[j].h) + 2;
+        if (dist < limit) add({ x: c.x, y: c.y });
       }
+      for (const q of armBorder(ends[j], out.setbacks[j], -1).reverse()) add(q);
     }
     chain.push(R[j]);
     out.chains.push(chain);
   }
   out.pts = pts;
   return out;
+}
+
+/**
+ * Points along one kerb of a curved arm, from just inside its mouth back to the node (side +1 = left, -1 = right).
+ * Empty for straight arms, where the mouth and the corner point already describe the kerb.
+ */
+function armBorder(e, setback, side) {
+  const out = [];
+  if (!e.at || setback < 1) return out;
+  const o = { x: 0, y: 0, dx: 0, dy: 0 };
+  e.at(0, o);
+  const x0 = o.x;
+  const y0 = o.y;
+  e.at(setback / 2, o);
+  // the centreline's distance from the straight ray tells whether the arm bends
+  const off = Math.abs((o.x - x0) * e.dy - (o.y - y0) * e.dx);
+  if (!(off > 0.05)) return out;
+  const n = Math.max(2, Math.ceil(setback / 1.5));
+  for (let m = n - 1; m >= 0; m--) {
+    e.at((setback * m) / n, o);
+    out.push({ x: o.x - o.dy * e.h * side, y: o.y + o.dx * e.h * side });
+  }
+  return out;
+}
+
+/**
+ * Control point of a corner fillet from border point a (arm direction da) to b (direction db): where the two
+ * kerb lines meet, so the curve leaves both roads tangentially. Falls back to the straight-arm corner when the
+ * arms curved enough that the lines meet behind a mouth.
+ */
+function filletControl(a, da, b, db, c) {
+  // a - da*t = b - db*u
+  const det = da.x * db.y - da.y * db.x;
+  if (Math.abs(det) > 1e-4) {
+    const rx = a.x - b.x;
+    const ry = a.y - b.y;
+    const t = (rx * db.y - ry * db.x) / det;
+    const u = (rx * da.y - ry * da.x) / det;
+    if (t > 0 && u > 0) return { x: a.x - da.x * t, y: a.y - da.y * t };
+  }
+  return { x: c.x, y: c.y };
 }
 
 /* ------------------------------------------------------------------ the network */
@@ -533,7 +593,14 @@ export class Network {
         dx = atA ? t.tx : -t.tx;
         dy = atA ? t.ty : -t.ty;
       }
-      out.push({ edge: e, atA, dx, dy, ang: Math.atan2(dy, dx), h: e.halfWidth });
+      const at = (s, o) => {
+        const p = e.poly.pointAt(atA ? s : e.len - s);
+        o.x = p.x;
+        o.y = p.y;
+        o.dx = atA ? p.tx : -p.tx;
+        o.dy = atA ? p.ty : -p.ty;
+      };
+      out.push({ edge: e, atA, dx, dy, ang: Math.atan2(dy, dx), h: e.halfWidth, at });
     }
     out.sort((p, q) => p.ang - q.ang);
     return out;

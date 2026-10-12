@@ -4,7 +4,7 @@
 // normal scaled by the kerb width; the shader widens the kerb to a minimum pixel width when zoomed out.
 
 import { LANE_W, LEVEL_H } from '../network.js';
-import { Poly } from '../geom.js';
+import { Poly, triangulate } from '../geom.js';
 import { smoothstep, lerp } from '../util.js';
 
 export const KERB_W = 0.4;
@@ -233,11 +233,17 @@ export function buildNodeParts(n, th) {
   const parts = { level: Math.ceil(n.z - 0.01), casing: new Buf(), fill: new Buf() };
   if (!n.fill) return parts;
   const P = n.fill.pts;
-  const c = { x: n.x, y: n.y, ex: 0, ey: 0 };
-  for (let i = 0; i < P.length; i++) {
-    const a = P[i];
-    const b = P[(i + 1) % P.length];
-    parts.fill.tri(c, pt(a.x, a.y), pt(b.x, b.y), th.road);
+  const tris = triangulate(P);
+  if (tris) {
+    for (const [a, b, c] of tris) parts.fill.tri(pt(P[a].x, P[a].y), pt(P[b].x, P[b].y), pt(P[c].x, P[c].y), th.road);
+  } else {
+    // not a simple polygon (overlapping arms): a fan from the centre still covers it
+    const c = { x: n.x, y: n.y, ex: 0, ey: 0 };
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i];
+      const b = P[(i + 1) % P.length];
+      parts.fill.tri(c, pt(a.x, a.y), pt(b.x, b.y), th.road);
+    }
   }
   const col = casingAlpha(n.z, casingColor(th, n.z));
   for (const chain of n.fill.chains) {
