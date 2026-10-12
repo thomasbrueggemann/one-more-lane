@@ -15,18 +15,19 @@ const MAX_UNDO = 30;
 
 export class Game {
   /**
-   * @param {{seed?:number, biome?:string, difficulty?:string, size?:number, res?:number, starter?:boolean}} opts
+   * @param {{seed?:number, biome?:string, difficulty?:string, mode?:string, size?:number, res?:number, starter?:boolean}} opts
    */
   constructor(opts = {}) {
     this.seed = opts.seed ?? Math.floor(Math.random() * 1e6);
     this.biome = opts.biome || 'meadow';
     this.difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
+    this.mode = opts.mode === 'free' ? 'free' : 'challenge';
     this.terrain = new Terrain({ seed: this.seed, biome: this.biome, size: opts.size || 2400, res: opts.res || 512 });
     this.net = new Network();
     this.sim = new Sim(this.net, this.seed);
     this.world = { net: this.net, terrain: this.terrain, buildings: () => this.city.list };
     this.planner = new RoadPlanner(this.world);
-    this.city = new City({ net: this.net, terrain: this.terrain, sim: this.sim, difficulty: this.difficulty, seed: this.seed });
+    this.city = new City({ net: this.net, terrain: this.terrain, sim: this.sim, difficulty: this.difficulty, seed: this.seed, free: this.free });
     this.speed = 1;
     this.acc = 0;
     this.simTime = 0;
@@ -39,6 +40,11 @@ export class Game {
     };
     this.city.onLevelUp = (level, batch) => this.emit('toast', { kind: 'level', level, batch });
     if (opts.starter !== false) this.makeStarter();
+  }
+
+  /** Free play: building never costs money. */
+  get free() {
+    return this.mode === 'free';
   }
 
   on(evt, fn) {
@@ -165,12 +171,12 @@ export class Game {
   }
 
   serialize() {
-    return { ...this.snapshot(), seed: this.seed, biome: this.biome, difficulty: this.difficulty };
+    return { ...this.snapshot(), seed: this.seed, biome: this.biome, difficulty: this.difficulty, mode: this.mode };
   }
 
   /** Rebuild a game from serialised data. */
   static fromSave(data, opts = {}) {
-    const g = new Game({ seed: data.seed, biome: data.biome, difficulty: data.difficulty, starter: false, ...opts });
+    const g = new Game({ seed: data.seed, biome: data.biome, difficulty: data.difficulty, mode: data.mode, starter: false, ...opts });
     g.restore(data);
     return g;
   }
@@ -178,7 +184,7 @@ export class Game {
   /* ------------------------------------------------------------ player actions */
 
   afford(cost) {
-    return cost <= 0 || this.city.money >= cost;
+    return this.free || cost <= 0 || this.city.money >= cost;
   }
 
   buildRoad(plan) {

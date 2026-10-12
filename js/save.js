@@ -46,7 +46,7 @@ export function saveInfo() {
     const m = JSON.parse(get(META));
     const ago = Math.max(0, Math.round((Date.now() - m.at) / 60000));
     const when = ago < 1 ? 'just now' : ago < 60 ? `${ago} min ago` : ago < 1440 ? `${Math.round(ago / 60)} h ago` : `${Math.round(ago / 1440)} d ago`;
-    return `Level ${m.level + 1} · ${m.biome} · ${when}`;
+    return `${m.mode === 'free' ? 'Free play · ' : ''}Level ${m.level + 1} · ${m.biome} · ${when}`;
   } catch (e) {
     return '';
   }
@@ -56,7 +56,7 @@ export function writeSave(game, view) {
   const data = game.serialize();
   data.view = view ? { cx: Math.round(view.cx), cy: Math.round(view.cy), ppm: Math.round(view.ppm * 100) / 100 } : null;
   const ok = set(SAVE, JSON.stringify(data));
-  if (ok) set(META, JSON.stringify({ level: game.city.level, biome: game.biome, at: Date.now() }));
+  if (ok) set(META, JSON.stringify({ level: game.city.level, biome: game.biome, mode: game.mode, at: Date.now() }));
   return ok;
 }
 

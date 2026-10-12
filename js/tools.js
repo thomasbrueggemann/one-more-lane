@@ -309,7 +309,7 @@ export class RoadTool extends Tool {
 
     const chips = [];
     if (!plan.ok) chips.push({ t: `Cannot create road: ${because(plan.error)}`, kind: 'error' });
-    if (plan.cost > 0) chips.push({ t: fmtMoney(plan.cost), kind: plan.ok && !this.game.afford(plan.cost) ? 'error' : 'cost' });
+    if (plan.cost > 0 && !this.game.free) chips.push({ t: fmtMoney(plan.cost), kind: plan.ok && !this.game.afford(plan.cost) ? 'error' : 'cost' });
     if (plan.ok && !this.game.afford(plan.cost)) chips.push({ t: 'Not enough money', kind: 'error' });
     if (this.app.opts.elev > 0 || Math.abs((this.pen.z ?? 0) - (end.z ?? 0)) > 0.01) chips.push({ t: `Elevation: ${end.z ?? this.app.opts.elev}` });
     if (this.guide) {
@@ -460,7 +460,7 @@ export class RoundaboutTool extends Tool {
     o.commit();
     const chips = [];
     if (!plan.ok) chips.push({ t: `Cannot create roundabout: ${because(plan.error)}`, kind: 'error' });
-    if (plan.ok) chips.push({ t: plan.cost >= 0 ? fmtMoney(plan.cost) : `+${fmtMoney(-plan.cost)}`, kind: this.game.afford(plan.cost) ? 'cost' : 'error' });
+    if (plan.ok && !this.game.free) chips.push({ t: plan.cost >= 0 ? fmtMoney(plan.cost) : `+${fmtMoney(-plan.cost)}`, kind: this.game.afford(plan.cost) ? 'cost' : 'error' });
     if (plan.ok && !this.game.afford(plan.cost)) chips.push({ t: 'Not enough money', kind: 'error' });
     chips.push({ t: `R ${Math.round(R)} m` });
     this.app.tip(chips, pt.sx, pt.sy, plan.ok ? '' : 'bad');
@@ -571,7 +571,7 @@ export class LaneTool extends Tool {
     const chips = [];
     chips.push({ t: t.delta > 0 ? 'Add lane' : 'Remove lane' });
     if (!ok) chips.push({ t: reason(t.plan.error), kind: 'error' });
-    else chips.push({ t: t.plan.cost >= 0 ? fmtMoney(t.plan.cost) : `+${fmtMoney(-t.plan.cost)}`, kind: this.game.afford(t.plan.cost) ? 'cost' : 'error' });
+    else if (!this.game.free) chips.push({ t: t.plan.cost >= 0 ? fmtMoney(t.plan.cost) : `+${fmtMoney(-t.plan.cost)}`, kind: this.game.afford(t.plan.cost) ? 'cost' : 'error' });
     this.app.tip(chips, pt.sx, pt.sy, ok ? '' : 'bad');
   }
   down(pt) {
@@ -634,7 +634,7 @@ export class SignalTool extends Tool {
     const th = this.app.theme;
     o.ring(n.x, n.y, 9, 0.9, th.ghostOk);
     o.commit();
-    this.app.tip(n.signal ? [{ t: 'Configure traffic lights' }] : [{ t: 'Install traffic lights' }, { t: fmtMoney(1500), kind: 'cost' }], pt.sx, pt.sy);
+    this.app.tip(n.signal ? [{ t: 'Configure traffic lights' }] : [{ t: 'Install traffic lights' }, ...(this.game.free ? [] : [{ t: fmtMoney(1500), kind: 'cost' }])], pt.sx, pt.sy);
   }
   down(pt) {
     this.hover(pt);
@@ -719,7 +719,7 @@ export class BulldozeTool extends Tool {
         o.road(e.poly, e.halfWidth + 0.3, red);
         refund += e.value * 0.5;
       }
-      this.app.tip([{ t: t.edge.ring != null ? 'Remove roundabout' : 'Remove road' }, { t: `+${fmtMoney(refund)}`, kind: 'cost' }], pt.sx, pt.sy);
+      this.app.tip([{ t: t.edge.ring != null ? 'Remove roundabout' : 'Remove road' }, ...(this.game.free ? [] : [{ t: `+${fmtMoney(refund)}`, kind: 'cost' }])], pt.sx, pt.sy);
     }
     o.commit();
     void th;

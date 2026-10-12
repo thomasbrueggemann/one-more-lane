@@ -33,6 +33,9 @@ Residents drive to work and to the shops (and trucks deliver goods) using routes
 fill the level bar; every level brings a new batch of buildings and a cash bonus. Red badges show buildings that are not
 connected to a road, orange ones show unhappy residents stuck in traffic. The gauge button shows a congestion heat-map.
 
+Pick **Free play** on the New city screen to build without money limits: nothing costs anything and the HUD shows ∞ instead of a
+balance. Levels and the building tray still progress as usual.
+
 * **Mouse:** left-drag uses the tool, right/middle-drag pans, wheel zooms. Keys: `1`–`6` tools, `Space` pause, `Ctrl+Z` undo, `T` traffic view, `Esc` cancel, WASD/arrows pan.
 * **Touch:** one finger uses the tool, two fingers pan and pinch to zoom. Building ghosts float above your fingertip so you can see them.
 

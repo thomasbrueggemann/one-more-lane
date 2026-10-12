@@ -35,7 +35,7 @@ export class City {
   /**
    * @param {{net:object, terrain:object, sim:object, difficulty?:string, seed?:number}} opts
    */
-  constructor({ net, terrain, sim, difficulty = 'normal', seed = 1 }) {
+  constructor({ net, terrain, sim, difficulty = 'normal', seed = 1, free = false }) {
     this.net = net;
     this.terrain = terrain;
     this.sim = sim;
@@ -45,6 +45,7 @@ export class City {
     this.buildings = new Map();
     this.list = [];
     this.nextId = 1;
+    this.free = !!free; // free play: nothing costs money, so the balance, income and level bonuses are unused
     this.money = this.diff.money;
     this.level = 0;
     this.xp = 0;
@@ -230,11 +231,11 @@ export class City {
   /* ------------------------------------------------------------ money & progress */
 
   canAfford(cost) {
-    return this.money >= cost;
+    return this.free || this.money >= cost;
   }
 
   spend(amount) {
-    this.money -= amount;
+    if (!this.free) this.money -= amount;
   }
 
   addBatch(level) {
@@ -251,7 +252,7 @@ export class City {
       this.level++;
       const batch = this.addBatch(this.level);
       need = xpNeeded(this.level);
-      this.money += 1500 + this.level * 500;
+      if (!this.free) this.money += 1500 + this.level * 500;
       if (this.onLevelUp) this.onLevelUp(this.level, batch);
     }
   }
@@ -332,7 +333,7 @@ export class City {
       for (const b of this.list) inc += BUILDING_TYPES[b.type].tax * (0.45 + 0.55 * b.sat);
       inc *= this.diff.tax;
       this.stats.income = inc;
-      this.money += inc * n;
+      if (!this.free) this.money += inc * n;
       this.updateBadges();
     }
   }

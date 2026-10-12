@@ -139,7 +139,7 @@ export class App {
   }
 
   startNewGame(o) {
-    const g = new Game({ seed: o.seed, biome: o.biome, difficulty: o.difficulty });
+    const g = new Game({ seed: o.seed, biome: o.biome, difficulty: o.difficulty, mode: o.mode });
     this.attachGame(g);
     this.started = true;
     this.paused = false;

@@ -53,7 +53,7 @@ export class UI {
     this.sig = null;
     this.toastTimers = [];
     this.menuView = 'main';
-    this.newOpts = { biome: 'meadow', difficulty: 'normal', seed: Math.floor(Math.random() * 99999) };
+    this.newOpts = { biome: 'meadow', mode: 'challenge', difficulty: 'normal', seed: Math.floor(Math.random() * 99999) };
     this.build();
   }
 
@@ -143,8 +143,8 @@ export class UI {
     const g = this.app.game;
     if (!g) return;
     const c = g.city;
-    this.el.money.textContent = fmtMoney(c.money);
-    this.el.income.textContent = `+${fmtMoney(c.stats.income * 60)}/min`;
+    this.el.money.textContent = c.free ? '\u221e' : fmtMoney(c.money);
+    this.el.income.textContent = c.free ? 'Free play' : `+${fmtMoney(c.stats.income * 60)}/min`;
     this.el.level.textContent = `Level ${c.level + 1}`;
     this.el.pop.textContent = `${c.stats.pop} residents`;
     this.el.xp.style.width = `${Math.min(100, (c.xp / xpNeeded(c.level)) * 100).toFixed(1)}%`;
@@ -199,7 +199,7 @@ export class UI {
         tool.refresh();
       };
       el.append(
-        group('Type', ...Object.values(CLASSES).map((c) => pill(h('span', {}, c.name, h('small', {}, ` $${(c.laneCost * 2).toFixed(0)}/m`)), o.cls === c.id, () => {
+        group('Type', ...Object.values(CLASSES).map((c) => pill(h('span', {}, c.name, this.app.game.free ? null : h('small', {}, ` $${(c.laneCost * 2).toFixed(0)}/m`)), o.cls === c.id, () => {
           o.cls = c.id;
           o.lanes[c.id] = Math.min(o.lanes[c.id] || ROAD_DEFAULT_LANES[c.id], MAX_LANES[c.id]);
           refresh();
@@ -245,7 +245,7 @@ export class UI {
         h('span', { class: 'hint-text' }, 'Point at the side of a road'),
       );
     } else if (tool.id === 'signal') {
-      el.append(h('span', { class: 'hint-text' }, `Tap a junction to install lights (${fmtMoney(1500)}). Tap lights again to configure.`));
+      el.append(h('span', { class: 'hint-text' }, `Tap a junction to install lights${this.app.game.free ? '' : ` (${fmtMoney(1500)})`}. Tap lights again to configure.`));
     } else if (tool.id === 'bulldoze') {
       el.append(h('span', { class: 'hint-text' }, 'Tap or drag over roads and buildings. Half the cost is refunded.'));
     } else if (tool.id === 'build') {
@@ -494,7 +494,11 @@ export class UI {
       const diffCards = Object.entries(DIFFICULTY).map(([id, d]) => h('button', { class: 'card' + (o.difficulty === id ? ' on' : ''), onclick: () => {
         o.difficulty = id;
         this.renderMenu();
-      } }, h('b', {}, d.name), h('small', {}, `${fmtMoney(d.money)} to start`)));
+      } }, h('b', {}, d.name), h('small', {}, o.mode === 'free' ? `Traffic \u00d7${d.demand}` : `${fmtMoney(d.money)} to start`)));
+      const modeCards = [['challenge', 'Challenge', 'Earn money to build'], ['free', 'Free play', 'Unlimited money']].map(([id, name, blurb]) => h('button', { class: 'card' + (o.mode === id ? ' on' : ''), onclick: () => {
+        o.mode = id;
+        this.renderMenu();
+      } }, h('b', {}, name), h('small', {}, blurb)));
       const input = h('input', { type: 'text', inputmode: 'numeric', value: String(o.seed), 'aria-label': 'Map seed' });
       input.addEventListener('input', () => {
         const n = parseInt(input.value.replace(/\D/g, ''), 10);
@@ -502,6 +506,7 @@ export class UI {
       });
       card.append(back(), h('h2', { class: 'wordmark', style: 'font-size:30px' }, 'New city'), h('div', { class: 'road-line' }),
         h('div', { class: 'field' }, h('h4', {}, 'Map'), h('div', { class: 'cards' }, ...biomeCards)),
+        h('div', { class: 'field' }, h('h4', {}, 'Mode'), h('div', { class: 'cards' }, ...modeCards)),
         h('div', { class: 'field' }, h('h4', {}, 'Difficulty'), h('div', { class: 'cards' }, ...diffCards)),
         h('div', { class: 'field' }, h('h4', {}, 'Seed'), h('div', { class: 'seed-row' }, input, h('button', { class: 'icon-btn', 'aria-label': 'Random seed', html: ICONS.dice, onclick: () => {
           o.seed = Math.floor(Math.random() * 999999);
